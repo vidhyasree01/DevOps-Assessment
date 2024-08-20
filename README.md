@@ -1,101 +1,177 @@
-Project Submission Guide
-1. Review Microservices and Configuration
-Understanding the Microservices
-Notification API: This service is responsible for receiving requests and queuing messages. It uses AWS SQS for message queuing and is deployed using AWS ECS Fargate.
+CI/CD Pipeline with Zero-Downtime Deployment for Notification API and Email Sender
+Overview
+This project implements a Notification API and Email Sender microservices using AWS ECS Fargate. The infrastructure is provisioned using Terraform, and a CI/CD pipeline is set up using GitHub Actions to automate the deployment process. The deployment strategy ensures zero downtime by using rolling updates.
 
-Email Sender: This service processes messages from the SQS queue and sends emails. It is also deployed using AWS ECS Fargate.
+Requirements
+Tools and Services
+Infrastructure as Code (IaC) Tools:
 
-Configuration Details
-Environment Variables: Ensure that .env files for each microservice are correctly configured with necessary variables such as AWS_REGION, SQS_QUEUE_URL, and any other required configurations.
+Terraform
 
-Service Interaction: The Notification API pushes messages to an SQS queue, and the Email Sender retrieves these messages for processing.
+AWS Services:
 
-2. Design Deployment Strategy
-Deployment Considerations
-Scalability: The architecture should handle varying loads. Use AWS ECS with Fargate to ensure that services scale according to demand.
+ECS Fargate
+Amazon SQS
+AWS App Mesh
+AWS Cloud Map
+Amazon ECR
+Amazon CloudWatch
+AWS IAM
+AWS SES
+Deployment Requirements
+Scalability and Reliability:
 
-Reliability: Implemented fault-tolerant architecture using multi-AZ deployments and health checks to ensure high availability.
+Implement auto-scaling based on CPU usage (70% threshold).
+Ensure system resilience and automatic recovery from failures.
+Observability:
 
-Security: Implemented least-privilege IAM roles, secure communication channels, and store sensitive data in AWS Secrets Manager or SSM Parameter Store.
+Set up monitoring and logging using AWS CloudWatch.
+Track key metrics such as queue length, processing times, and error rates.
+Security:
 
-Architecture Design
-Service Mesh: Utilize AWS App Mesh to manage and secure communication between microservices.
-
-Service Discovery: Use AWS Cloud Map to enable microservices to discover each other dynamically.
-
-Monitoring: Implementededed CloudWatch dashboards and alarms to monitor service health and performance.
-
-3. Create Dockerfiles
-Dockerfile Structure
-Base Image: Use an official Node.js image as the base for both microservices.
-
-Dependencies: Copy the package.json and package-lock.json files, and run npm install to install dependencies.
-
-Application Code: Copy the application code into the container.
-
-Expose Ports: Expose the necessary ports (e.g., 3000 for the Notification API).
-
-CMD Instruction: Define the command to start the application.
-
-Testing Docker Images
-Local Testing: Build and run the Docker images locally to ensure that the microservices work as expected before pushing to ECR.
-4. Push to Amazon ECR
-ECR Repository Creation
-Create ECR Repositories: Use the AWS CLI or the AWS Management Console to create ECR repositories for the Notification API and Email Sender services.
-Push Docker Images
-Tag Docker Images: Tag the Docker images with the ECR repository URI and the commit SHA for versioning.
-
-Push Images: Push the tagged images to their respective ECR repositories using the AWS CLI.
-
-5. Provision Infrastructure
+Implement least-privilege IAM roles.
+Securely store sensitive information using AWS Secrets Manager or Parameter Store.
+Architecture
+Components
+Notification API (ECS/Fargate): Receives requests and queues them into Amazon SQS.
+Email Sender (ECS/Fargate): Processes queued messages and sends emails using AWS SES.
+AWS App Mesh: Provides service mesh capabilities for the microservices.
+AWS Cloud Map: Facilitates service discovery for microservices.
+Amazon SQS: Queues messages between the Notification API and Email Sender.
+Amazon CloudWatch: Monitors the system and logs application output.
+Workflow
+Client Request: Client sends a notification request to the Notification API.
+Notification API: The API queues the request into Amazon SQS.
+Email Sender: Processes the SQS message and sends an email using AWS SES.
+Monitoring: CloudWatch monitors the system performance and logs.
 Infrastructure as Code (IaC)
-Choose a Tool: Terraform
+Terraform Modules
+The infrastructure is provisioned using Terraform with the following modules:
 
-IaC Best Practices:
+VPC: Creates a custom VPC with public and private subnets, internet gateway, NAT gateway, and route tables.
+ECS: Manages the ECS cluster, task definitions, and services for Notification API and Email Sender.
+ECR: Creates ECR repositories for storing Docker images.
+SQS: Manages the SQS queue for message handling.
+SES: Configures SES for sending emails.
+IAM: Manages IAM roles and policies.
+App Mesh: Configures AWS App Mesh for service mesh capabilities.
+Cloud Map: Manages service discovery using AWS Cloud Map.
+Load Balancer: Creates and configures an Application Load Balancer (ALB).
+CloudWatch: Configures monitoring and logging using CloudWatch.
+Terraform Configuration
+Below is the Terraform configuration structure used in this project:
+terraform/
+├── main.tf
+├── variables.tf
+├── outputs.tf
+├── .terraform/
+├── modules/
+│   ├── vpc/
+│   ├── ecs/
+│   ├── ecr/
+│   ├── sqs/
+│   ├── ses/
+│   ├── iam/
+│   ├── appmesh/
+│   ├── cloudmap/
+│   ├── load_balancer/
+│   ├── cloudwatch/
+└── .gitignore
+CI/CD Pipeline
+GitHub Actions Workflow
+A GitHub Actions workflow is configured to automate the CI/CD process, including building Docker images, pushing them to Amazon ECR, and deploying the infrastructure using Terraform.
 
-Ensure modularity by breaking down the infrastructure into reusable modules.
-Follow the DRY (Don’t Repeat Yourself) principle.
-Document the code with comments explaining each resource and its purpose.
-6. Deploy Services on AWS ECS or Fargate
-ECS Service Deployment
-Cluster Configuration: Set up an ECS cluster using Fargate for serverless container deployment.
+Workflow File: .github/workflows/ci-cd-pipeline.yml
+yaml
+Copy code
+name: CI/CD Pipeline with Zero-Downtime Deployment
 
-Task Definitions: Define ECS task definitions for both the Notification API and Email Sender services. Include the necessary container settings such as CPU, memory, and network configurations.
+on:
+  push:
+    branches:
+      - main
 
-Service Configuration: Create ECS services for each microservice, linking them to the appropriate task definitions and load balancers.
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-AWS App Mesh and Cloud Map Integration
-Service Mesh: Configure AWS App Mesh to manage communication between the microservices.
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-Service Discovery: Use AWS Cloud Map to allow services to discover each other by name within the VPC.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
-7. Implemented Logging with CloudWatch
-CloudWatch Log Groups
-Create Log Groups: Create dedicated CloudWatch Log Groups for each service (Notification API and Email Sender).
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
 
-Log Configuration: Configure the ECS task definitions to send logs to the appropriate CloudWatch Log Groups.
+      - name: Build and Push Docker Image for Notification Service
+        run: |
+          IMAGE_URI=${{ secrets.ECR_URI }}/notification-app:${{ github.sha }}
+          docker build -t $IMAGE_URI -f ./notification-app/Dockerfile .
+          docker push $IMAGE_URI
 
-Monitoring Setup
-Dashboards: Create CloudWatch dashboards to monitor key metrics such as CPU utilization, memory usage, and SQS queue length.
+      - name: Build and Push Docker Image for Email Service
+        run: |
+          IMAGE_URI=${{ secrets.ECR_URI }}/email-service-app:${{ github.sha }}
+          docker build -t $IMAGE_URI -f ./email-service-app/Dockerfile .
+          docker push $IMAGE_URI
 
-Alarms: Set up CloudWatch Alarms to notify you of critical issues such as high CPU usage or a large number of messages in the SQS queue.
+      - name: Deploy Infrastructure with Terraform
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          cd terraform
+          terraform init
+          terraform apply -auto-approve \
+            -var="notification_image=${{ secrets.ECR_URI }}/notification-app:${{ github.sha }}" \
+            -var="email_image=${{ secrets.ECR_URI }}/email-service-app:${{ github.sha }}"
 
-8. Configure Auto-Scaling
-Auto-Scaling Policies
-CPU-Based Scaling: Implemented auto-scaling based on CPU usage with a 70% threshold. This ensures that the system scales up during high load and scales down when demand decreases.
+      - name: Update ECS Service for Rolling Deployment
+        run: |
+          aws ecs update-service \
+            --cluster notification-cluster \
+            --service notification-service \
+            --force-new-deployment \
+            --region us-east-1
 
-Terraform Configuration: Use the aws_autoscaling_policy resource in Terraform to define the scaling policies.
+      - name: Monitor Deployment
+        run: |
+          aws ecs wait services-stable \
+            --cluster notification-cluster \
+            --services notification-service \
+            --region us-east-1
+Deployment Steps
+Checkout Code: The code is checked out from the repository.
+Docker Buildx: Docker Buildx is set up for building multi-platform Docker images.
+Amazon ECR Login: The GitHub Actions workflow logs in to Amazon ECR to push Docker images.
+Build and Push Docker Images: Docker images for Notification API and Email Sender are built and pushed to ECR.
+Terraform Deployment: The infrastructure is provisioned using Terraform, with image URIs passed as variables.
+Rolling Deployment: The ECS service is updated to trigger a rolling deployment, ensuring zero downtime.
+Monitor Deployment: The deployment is monitored to ensure the service is running as expected.
+Zero-Downtime Deployment
+The deployment strategy involves updating the ECS services incrementally (rolling update), which ensures that new tasks are started before the old ones are stopped, minimizing downtime.
 
-9. Configure Health Checks
-Health Check Implementation
-Endpoints: Ensure that each microservice has a health check endpoint (e.g., /health) that returns a 200 status code if the service is healthy.
-
-ECS Configuration: Configure the ECS service to use this endpoint for health checks.
-
-Load Balancer Integration
-Health Check Path: Configure the ALB target group to use the health check path configured in the microservices.
-10. Test and Verify
-Functional Testing
-Service Functionality: Test each microservice individually to ensure that they function as expected.
-
-End-to-End Testing: Perform end-to-end tests to ensure that messages flow correctly from the Notification API to the Email Sender via SQS.
+Testing and Verification
+Health Checks: ECS health checks are configured to ensure the application is healthy before serving traffic.
+Load Balancer: The Application Load Balancer (ALB) is configured to route traffic to the healthy tasks.
+Monitoring: CloudWatch monitors the ECS cluster, logging metrics such as CPU utilization, memory usage, and task health.
+Testing: Automated tests and manual verification ensure that the services are functioning correctly after deployment.
+Documentation and Operational Instructions
+Configuration
+Environment Variables: Store sensitive information (like AWS credentials, SQS URLs, etc.) in .env files or secrets manager.
+Terraform Variables: Configure Terraform variables for region, cluster name, image URIs, etc., in variables.tf.
+Running the Pipeline
+Push changes to the main branch to trigger the GitHub Actions workflow.
+Monitor the pipeline execution in the GitHub Actions tab.
+Rolling Back
+If issues are detected, revert to the previous task definition in ECS, or manually rollback using AWS CLI.
+Known Issues
+SQS Queue Messages Not Received: Ensure the correct SQS queue URL is used, and the IAM roles have the necessary permissions.
+Next Steps
+Implement additional monitoring and alerting in CloudWatch.
+Explore Canary deployments as an enhancement to zero-downtime strategies.
+Conclusion
+This project demonstrates the deployment of microservices on AWS using a robust CI/CD pipeline with Terraform, Docker, and GitHub Actions. The focus on scalability, resilience, observability, and security ensures that the infrastructure is production-ready and can handle real-world demands.
